@@ -1,0 +1,49 @@
+[
+  {
+    "keywords": [
+      "slow",
+      "performance",
+      "lag",
+      "slowness",
+      "freeze",
+      "hanging"
+    ],
+    "answer": "If your laptop is slow, start with a reboot, then check Task Manager CPU/RAM, free disk space (10%+), disable heavy startup apps, and run the Endpoint Health remediation script."
+  },
+  {
+    "keywords": [
+      "wifi",
+      "wi-fi",
+      "wireless",
+      "no internet",
+      "disconnect"
+    ],
+    "answer": "For WiFi issues: forget and rejoin the corporate SSID, toggle airplane mode, run ipconfig /flushdns, reboot, and test a different access point. Escalate if multiple users are affected."
+  },
+  {
+    "keywords": [
+      "vpn",
+      "tunnel",
+      "remote access"
+    ],
+    "answer": "For VPN problems: confirm raw internet access, check time and date, restart the VPN client, re-download the profile if corrupted, and capture the error message/code for escalation."
+  },
+  {
+    "keywords": [
+      "outlook",
+      "email",
+      "mail",
+      "sync"
+    ],
+    "answer": "For Outlook not syncing: restart Outlook, use Send/Receive > Update Folder, repair/recreate the profile, and confirm VPN connectivity if mail requires corporate network access."
+  },
+  {
+    "keywords": [
+      "smart card",
+      "piv",
+      "badge",
+      "card reader"
+    ],
+    "answer": "If a smart card/PIV is not detected: reinsert the card, try another USB port/reader, restart the smart card middleware/service, then reboot. Test the card on another machine to see if the issue is with the card or device."
+  }
+]

@@ -1,0 +1,658 @@
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>AI Assistant - Endpoint Demo (Gemini + Deep Research + Drive)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  </head>
+  <body class="bg-gray-50">
+    <div id="root"></div>
+
+    <script type="text/babel">
+      const { useState, useRef } = React;
+
+      function App() {
+        const [messages, setMessages] = useState([]);
+        const [question, setQuestion] = useState("");
+        const [phase, setPhase] = useState("");
+        const [recents, setRecents] = useState([]);
+        const [suggestions, setSuggestions] = useState([]);
+        const [filePath, setFilePath] = useState(null);
+        const [fileName, setFileName] = useState(null);
+        const [fileResult, setFileResult] = useState("");
+        const [sourceLabel, setSourceLabel] = useState("");
+        const [menuOpen, setMenuOpen] = useState(false);
+        const [driveOpen, setDriveOpen] = useState(false);
+        const [selectedDriveFile, setSelectedDriveFile] = useState("sample.txt");
+
+        const fileInputRef = useRef(null);
+
+        const driveFiles = ["sample.txt", "system_log.txt", "endpoint_health.json"];
+
+        const examplePrompts = [
+          "My laptop is very slow. What should I check first?",
+          "WiFi keeps disconnecting when I'm on VPN.",
+          "Outlook is not syncing when I work remotely.",
+          "What automation can we build for endpoint operations?"
+        ];
+
+        async function send(promptFromChip) {
+          const q = promptFromChip || question;
+          if (!q.trim()) return;
+
+          setMessages((m) => [...m, { from: "user", text: q }]);
+          setRecents((r) => [q, ...r.slice(0, 10)]);
+          setQuestion("");
+          setSourceLabel("");
+          setMenuOpen(false);
+
+          setPhase("thinking");
+          await new Promise((r) => setTimeout(r, 500));
+          setPhase("analyzing");
+          await new Promise((r) => setTimeout(r, 500));
+          setPhase("typing");
+          await new Promise((r) => setTimeout(r, 500));
+
+          try {
+            const res = await fetch("http://127.0.0.1:5050/ask", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ question: q })
+            });
+            const data = await res.json();
+            setMessages((m) => [...m, { from: "ai", text: data.answer }]);
+            if (data.source) setSourceLabel("Source: " + data.source);
+            else setSourceLabel("");
+            setSuggestions(data.suggestions || []);
+          } catch (e) {
+            setMessages((m) => [
+              ...m,
+              { from: "ai", text: "Backend unreachable. Is Flask running on port 5050?" }
+            ]);
+          } finally {
+            setPhase("");
+          }
+        }
+
+        // ---------- File upload ----------
+        async function handleFileSelected(event) {
+          const file = event.target.files[0];
+          if (!file) return;
+          const fd = new FormData();
+          fd.append("file", file);
+          try {
+            const res = await fetch("http://127.0.0.1:5050/upload", {
+              method: "POST",
+              body: fd
+            });
+            const data = await res.json();
+            if (data.path) {
+              setFilePath(data.path);
+              setFileName(data.filename || file.name);
+              setFileResult("File uploaded successfully and ready for deep research/search.");
+              setMessages((m) => [
+                ...m,
+                {
+                  from: "ai",
+                  text: `I've attached **${file.name}** from your device.`
+                }
+              ]);
+              setDriveOpen(false);
+            } else {
+              setFileResult("Upload failed: " + JSON.stringify(data));
+            }
+          } catch (e) {
+            setFileResult("Upload error: " + e.message);
+          }
+        }
+
+        async function searchInFile(term) {
+          if (!filePath) {
+            setMessages((m) => [
+              ...m,
+              { from: "ai", text: "No file attached yet. Use “Add photos & files” or Google Drive first." }
+            ]);
+            return;
+          }
+          if (!term.trim()) {
+            setMessages((m) => [
+              ...m,
+              { from: "ai", text: "Please provide a keyword to search inside the file." }
+            ]);
+            return;
+          }
+          try {
+            const res = await fetch("http://127.0.0.1:5050/search-file", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ path: filePath, query: term })
+            });
+            const data = await res.json();
+            setMessages((m) => [
+              ...m,
+              {
+                from: "ai",
+                text:
+                  "File search result for \"" +
+                  term +
+                  "\":\n" +
+                  JSON.stringify(data, null, 2)
+              }
+            ]);
+          } catch (e) {
+            setMessages((m) => [
+              ...m,
+              { from: "ai", text: "File search error: " + e.message }
+            ]);
+          }
+        }
+
+        // ---------- Deep research ----------
+        async function runDeepResearch() {
+          setMenuOpen(false);
+          const lastQuestion =
+            [...messages].reverse().find((m) => m.from === "user")?.text ||
+            question ||
+            "endpoint performance issues";
+
+          setMessages((m) => [
+            ...m,
+            { from: "user", text: "(Deep research) " + lastQuestion }
+          ]);
+
+          setPhase("thinking");
+          await new Promise((r) => setTimeout(r, 500));
+          setPhase("analyzing");
+          await new Promise((r) => setTimeout(r, 500));
+          setPhase("typing");
+          await new Promise((r) => setTimeout(r, 500));
+
+          try {
+            const res = await fetch("http://127.0.0.1:5050/deep-research", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ question: lastQuestion })
+            });
+            const data = await res.json();
+            setMessages((m) => [
+              ...m,
+              { from: "ai", text: data.answer }
+            ]);
+            setSourceLabel("Source: deep-research (DB + logs + health + files)");
+          } catch (e) {
+            setMessages((m) => [
+              ...m,
+              { from: "ai", text: "Deep research error: " + e.message }
+            ]);
+          } finally {
+            setPhase("");
+          }
+        }
+
+        // ---------- Drive actions ----------
+        function onAddFromDrive() {
+          setMenuOpen(false);
+          setDriveOpen(true);
+        }
+
+        async function attachDriveFile() {
+          if (!selectedDriveFile) return;
+          try {
+            const res = await fetch("http://127.0.0.1:5050/drive-attach", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ filename: selectedDriveFile })
+            });
+            const data = await res.json();
+            if (data.path) {
+              setFilePath(data.path);
+              setFileName(data.filename);
+              setFileResult("Attached Drive file: " + data.filename);
+              setMessages((m) => [
+                ...m,
+                {
+                  from: "ai",
+                  text: `I've attached **${data.filename}** from Google Drive (simulated).`
+                }
+              ]);
+            } else {
+              setFileResult("Drive attach failed: " + JSON.stringify(data));
+            }
+          } catch (e) {
+            setFileResult("Drive attach error: " + e.message);
+          } finally {
+            setDriveOpen(false);
+          }
+        }
+
+        // ---------- Menu actions ----------
+        function onAddFilesClick() {
+          setMenuOpen(false);
+          if (fileInputRef.current) fileInputRef.current.click();
+        }
+
+        function onDeepResearchMenu() {
+          runDeepResearch();
+        }
+
+        function onCreateImage() {
+          setMenuOpen(false);
+          setMessages((m) => [
+            ...m,
+            {
+              from: "ai",
+              text:
+                "[Demo] Imagine I just created an architecture diagram image for this scenario."
+            }
+          ]);
+        }
+
+        function onAgentMode() {
+          setMenuOpen(false);
+          setMessages((m) => [
+            ...m,
+            {
+              from: "ai",
+              text:
+                "[Demo] Agent mode: in a real system I could orchestrate ticketing, monitoring, patching tools, etc."
+            }
+          ]);
+        }
+
+        function onAddSources() {
+          setMenuOpen(false);
+          const term = window.prompt(
+            "Enter a keyword to search inside the attached file (for demo Add sources):"
+          );
+          if (term) searchInFile(term);
+        }
+
+        function onMore() {
+          setMenuOpen(false);
+          setMessages((m) => [
+            ...m,
+            {
+              from: "ai",
+              text:
+                "[Demo] More tools could live here: compliance checks, capacity planning, endpoint fleet analytics, etc."
+            }
+          ]);
+        }
+
+        function newChat() {
+          setMessages([]);
+          setSuggestions([]);
+          setSourceLabel("");
+          setFileResult("");
+        }
+
+        // ---------- SVG Icons ----------
+        const IconPaperclip = () => (
+          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <path
+              d="M21 7l-9.5 9.5a3.5 3.5 0 01-5-5L14 4"
+              strokeWidth="1.7"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        );
+
+        const IconDrive = () => (
+          <svg className="w-4 h-4" viewBox="0 0 24 24">
+            <polygon fill="#0F9D58" points="6,19 3,14 9,3 12,8" />
+            <polygon fill="#FFCD40" points="18,19 6,19 12,8 21,8" />
+            <polygon fill="#4285F4" points="21,8 18,13 12,22 18,19" />
+          </svg>
+        );
+
+        const IconMegaphone = () => (
+          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <path
+              d="M3 11l14-5v12L3 13v-2z"
+              strokeWidth="1.7"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+            <path d="M9 14v5" strokeWidth="1.7" strokeLinecap="round" />
+          </svg>
+        );
+
+        const IconImage = () => (
+          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <rect x="3" y="5" width="18" height="14" rx="2" ry="2" strokeWidth="1.7" />
+            <circle cx="9" cy="10" r="1.5" strokeWidth="1.3" />
+            <path d="M21 15l-4.5-4.5L9 17" strokeWidth="1.7" strokeLinecap="round" />
+          </svg>
+        );
+
+        const IconAgent = () => (
+          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <circle cx="12" cy="7" r="3" strokeWidth="1.7" />
+            <path
+              d="M5 19c1.5-3 3.5-4.5 7-4.5S17.5 16 19 19"
+              strokeWidth="1.7"
+              strokeLinecap="round"
+            />
+          </svg>
+        );
+
+        const IconSources = () => (
+          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <path
+              d="M4 6h16M4 12h10M4 18h7"
+              strokeWidth="1.7"
+              strokeLinecap="round"
+            />
+          </svg>
+        );
+
+        const IconMore = () => (
+          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <circle cx="6" cy="12" r="1" strokeWidth="1.7" />
+            <circle cx="12" cy="12" r="1" strokeWidth="1.7" />
+            <circle cx="18" cy="12" r="1" strokeWidth="1.7" />
+          </svg>
+        );
+
+        return (
+          <div className="flex h-screen">
+            {/* Sidebar */}
+            <div className="w-64 bg-white border-r border-gray-200 p-4 flex flex-col">
+              <button
+                onClick={newChat}
+                className="text-left px-3 py-2 rounded-lg bg-gray-100 mb-4"
+              >
+                + New chat
+              </button>
+              <h2 className="text-sm text-gray-500 mb-2">Recent chats</h2>
+              <div className="flex-1 overflow-y-auto space-y-1">
+                {recents.map((r, i) => (
+                  <div
+                    key={i}
+                    className="px-3 py-2 text-sm bg-white hover:bg-gray-100 rounded cursor-pointer"
+                  >
+                    {r}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Main column */}
+            <div className="flex-1 flex flex-col items-start relative">
+              {/* Header */}
+              <div className="w-full bg-white shadow-sm border-b border-gray-100 py-4 px-6 text-left text-lg font-semibold">
+                ✨ AI Assistant (DB + Files + Deep Research + Drive)
+              </div>
+
+              <div className="flex-1 p-8 w-full overflow-y-auto">
+                <h1 className="text-4xl mb-6">
+                  <span className="text-blue-600">Hello,</span>
+                </h1>
+
+                {/* Example prompts */}
+                <div className="flex flex-wrap gap-2 mb-4">
+                  {examplePrompts.map((p, i) => (
+                    <button
+                      key={i}
+                      onClick={() => send(p)}
+                      className="rounded-full bg-white px-4 py-2 text-xs sm:text-sm text-gray-700 shadow border border-gray-100 hover:bg-gray-50"
+                    >
+                      {p}
+                    </button>
+                  ))}
+                </div>
+
+                {fileName && (
+                  <div className="mb-4 text-xs text-gray-500">
+                    Attached file: <span className="font-medium">{fileName}</span>
+                  </div>
+                )}
+
+                {fileResult && (
+                  <pre className="mb-4 bg-gray-900 text-gray-100 text-xs rounded-lg p-3 max-h-32 overflow-y-auto">
+{fileResult}
+                  </pre>
+                )}
+
+                {sourceLabel && (
+                  <div className="mb-4 text-xs text-gray-500">{sourceLabel}</div>
+                )}
+
+                {suggestions.length > 0 && (
+                  <div className="mb-4 flex flex-wrap gap-2">
+                    {suggestions.map((s, i) => (
+                      <span
+                        key={i}
+                        className="px-3 py-1 bg-gray-200 rounded-full text-xs text-gray-700"
+                      >
+                        {s}
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                {/* Messages */}
+                <div className="space-y-4 mb-24">
+                  {messages.map((m, i) => (
+                    <div
+                      key={i}
+                      className={
+                        m.from === "user"
+                          ? "bg-blue-600 text-white p-3 rounded-2xl max-w-xl ml-auto whitespace-pre-wrap"
+                          : "bg-white p-3 rounded-2xl shadow border max-w-xl whitespace-pre-wrap"
+                      }
+                    >
+                      {m.text}
+                    </div>
+                  ))}
+
+                  {phase === "thinking" && (
+                    <div className="p-3 bg-white shadow border rounded-2xl inline-block text-sm text-gray-500">
+                      Thinking…
+                    </div>
+                  )}
+                  {phase === "analyzing" && (
+                    <div className="p-3 bg-white shadow border rounded-2xl inline-block text-sm text-gray-500">
+                      Analyzing your question…
+                    </div>
+                  )}
+                  {phase === "typing" && (
+                    <div className="p-3 bg-white shadow border rounded-2xl inline-flex items-center space-x-2 text-sm text-gray-700">
+                      <span>Typing</span>
+                      <span className="flex space-x-1">
+                        <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></span>
+                        <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce [animation-delay:0.1s]"></span>
+                        <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce [animation-delay:0.2s]"></span>
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Prompt bar with + menu */}
+              <div className="w-full px-8 pb-6">
+                <div className="bg-white rounded-3xl shadow flex items-center px-3 py-2 relative">
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    style={{ display: "none" }}
+                    accept=".txt"
+                    onChange={handleFileSelected}
+                  />
+
+                  {/* + button */}
+                  <button
+                    type="button"
+                    onClick={() => setMenuOpen((o) => !o)}
+                    className="mr-2 flex items-center justify-center w-9 h-9 rounded-full border border-gray-300 text-gray-600 hover:bg-gray-100"
+                  >
+                    <span className="text-xl leading-none">+</span>
+                  </button>
+
+                  {/* Dropdown menu */}
+                  {menuOpen && (
+                    <div className="absolute bottom-12 left-3 w-64 bg-white rounded-xl shadow-lg border border-gray-100 py-2 text-sm z-10">
+                      <button
+                        className="w-full flex items-center px-3 py-2 hover:bg-gray-50 text-left"
+                        onClick={onAddFilesClick}
+                      >
+                        <span className="mr-3">
+                          <IconPaperclip />
+                        </span>
+                        Add photos &amp; files
+                      </button>
+                      <button
+                        className="w-full flex items-center px-3 py-2 hover:bg-gray-50 text-left"
+                        onClick={onAddFromDrive}
+                      >
+                        <span className="mr-3">
+                          <IconDrive />
+                        </span>
+                        Add from Google Drive
+                      </button>
+                      <div className="border-t my-1" />
+                      <button
+                        className="w-full flex items-center px-3 py-2 hover:bg-gray-50 text-left"
+                        onClick={onDeepResearchMenu}
+                      >
+                        <span className="mr-3">
+                          <IconMegaphone />
+                        </span>
+                        Deep research
+                      </button>
+                      <button
+                        className="w-full flex items-center px-3 py-2 hover:bg-gray-50 text-left"
+                        onClick={onCreateImage}
+                      >
+                        <span className="mr-3">
+                          <IconImage />
+                        </span>
+                        Create image
+                      </button>
+                      <button
+                        className="w-full flex items-center px-3 py-2 hover:bg-gray-50 text-left"
+                        onClick={onAgentMode}
+                      >
+                        <span className="mr-3">
+                          <IconAgent />
+                        </span>
+                        Agent mode
+                      </button>
+                      <button
+                        className="w-full flex items-center px-3 py-2 hover:bg-gray-50 text-left"
+                        onClick={onAddSources}
+                      >
+                        <span className="mr-3">
+                          <IconSources />
+                        </span>
+                        Add sources
+                      </button>
+                      <button
+                        className="w-full flex items-center px-3 py-2 hover:bg-gray-50 text-left"
+                        onClick={onMore}
+                      >
+                        <span className="mr-3">
+                          <IconMore />
+                        </span>
+                        More
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Input */}
+                  <input
+                    className="flex-1 outline-none text-base px-2 py-1"
+                    placeholder="Ask anything about endpoint issues or automation..."
+                    value={question}
+                    onChange={(e) => setQuestion(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && send()}
+                  />
+
+                  <button
+                    onClick={() => send()}
+                    className="ml-3 bg-blue-600 text-white px-4 py-1 rounded-full text-sm"
+                  >
+                    Send
+                  </button>
+                </div>
+              </div>
+
+              {/* Google Drive Modal */}
+              {driveOpen && (
+                <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-20">
+                  <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-5">
+                    <div className="flex justify-between items-center mb-4">
+                      <h2 className="text-sm font-semibold text-gray-800">
+                        Google Drive (simulated)
+                      </h2>
+                      <button
+                        onClick={() => setDriveOpen(false)}
+                        className="text-gray-400 hover:text-gray-600 text-lg leading-none"
+                      >
+                        ×
+                      </button>
+                    </div>
+                    <p className="text-xs text-gray-500 mb-3">
+                      Choose a file from your simulated Drive or upload from your device.
+                    </p>
+                    <div className="border rounded-lg max-h-48 overflow-y-auto mb-4">
+                      {driveFiles.map((name) => (
+                        <button
+                          key={name}
+                          onClick={() => setSelectedDriveFile(name)}
+                          className={
+                            "w-full text-left px-3 py-2 text-sm flex items-center " +
+                            (selectedDriveFile === name
+                              ? "bg-blue-50 text-blue-700"
+                              : "hover:bg-gray-50 text-gray-700")
+                          }
+                        >
+                          <span className="mr-2">📄</span>
+                          {name}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="text-xs text-gray-500">
+                        Selected: <span className="font-medium">{selectedDriveFile}</span>
+                      </div>
+                      <button
+                        className="text-xs text-blue-600 hover:underline"
+                        onClick={() => {
+                          if (fileInputRef.current) fileInputRef.current.click();
+                        }}
+                      >
+                        Upload from device…
+                      </button>
+                    </div>
+                    <div className="flex justify-end space-x-2">
+                      <button
+                        onClick={() => setDriveOpen(false)}
+                        className="px-3 py-1.5 text-xs rounded-full border border-gray-300 text-gray-700 hover:bg-gray-50"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={attachDriveFile}
+                        className="px-4 py-1.5 text-xs rounded-full bg-blue-600 text-white hover:bg-blue-700"
+                      >
+                        Attach
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      }
+
+      ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+    </script>
+  </body>
+</html>

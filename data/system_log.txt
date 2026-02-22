@@ -1,0 +1,3 @@
+2025-11-20T10:00Z WARN WiFi unstable on device LAPTOP-123
+2025-11-20T10:05Z ERROR VPN tunnel failure code 720 on device LAPTOP-123
+2025-11-20T10:10Z INFO Outlook sync delay detected for user jdoe

@@ -1,0 +1,7 @@
+Sample endpoint text document for testing search.
+Topics included in this document:
+- VPN tunnel failure and reconnect attempts
+- WiFi instability on corporate networks
+- Outlook sync delay over VPN
+- Laptop performance issues during patching windows
+- Smart card authentication failures.
